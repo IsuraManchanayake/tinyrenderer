@@ -1,0 +1,1 @@
+start "C:\Program Files (x86)\Google\Picasa3\PicasaPhotoViewer.exe" "C:\cygwin64\home\isura\tinyrenderer\isura1.tga"
