@@ -1,7 +1,6 @@
 #pragma once
 
 #include "tgaimage.h"
-#include <Windows.h>
 
 enum class DrawMode {
 	WireFrame,

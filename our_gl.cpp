@@ -1,6 +1,7 @@
 #include <cmath>
 #include <limits>
 #include <cstdlib>
+#include <algorithm>
 #include "our_gl.h"
 
 Matrix ModelView;

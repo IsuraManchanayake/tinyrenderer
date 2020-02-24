@@ -8,22 +8,13 @@
 #include <algorithm>
 #include <array>
 
+#if defined(_WIN32)
+#include <Windows.h>
+#endif
+
 void TGAFile::show() const {
 #if defined(_WIN32)
-	STARTUPINFO si;
-	PROCESS_INFORMATION pi;
-
-	ZeroMemory(&si, sizeof(si));
-	si.cb = sizeof(si);
-	ZeroMemory(&pi, sizeof(pi));
-
-	if (!CreateProcess("view.bat", NULL, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
-		printf("Image viewer open failed (%d).\n", GetLastError());
-		exit(-1);
-	}
-	WaitForSingleObject(pi.hProcess, INFINITE);
-	CloseHandle(pi.hProcess);
-	CloseHandle(pi.hThread);
+	ShellExecute(0, 0, "isura1.tga", 0, 0, SW_SHOW);
 #endif
 }
 
