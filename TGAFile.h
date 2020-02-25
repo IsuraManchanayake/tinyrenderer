@@ -9,7 +9,8 @@ enum class DrawMode {
 	WireFrameIgnoreZ
 };
 
-#define FLOAT_LINE_CALC
+#define LINE_FLOAT
+//#define TRIANGLE_LINE_SWEEP
 
 struct TGAFile : public TGAImage {
 

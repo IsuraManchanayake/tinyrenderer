@@ -6,8 +6,10 @@
 #include <vector>
 #include <algorithm>
 #include <array>
+#include <random>
 
 #if defined(_WIN32)
+#define NOMINMAX
 #include <Windows.h>
 #endif
 
@@ -21,7 +23,7 @@ void TGAFile::line(const Vec2i& v1, const Vec2i& v2, const TGAColor& stroke) {
 	line(v1.x, v1.y, v2.x, v2.y, stroke);
 }
 
-#if defined(FLOAT_LINE_CALC)
+#if defined(LINE_FLOAT)
 void TGAFile::line(int x1, int y1, int x2, int y2, const TGAColor& stroke) {
 	if (x1 == x2 && y1 == y2) return;
 	int dx = std::abs(x2 - x1);
@@ -84,38 +86,57 @@ void TGAFile::line(int x0, int y0, int x1, int y1, const TGAColor& color) {
 void TGAFile::drawObj(std::string objPath, const TGAColor& stroke, DrawMode mode) {
 	std::ifstream ifs(objPath, std::ifstream::in);
 	if (!ifs.good()) { return; }
-	auto xytransform = [this](Vec2f xy) { return Vec2i(width * ((xy.x + 1) / 2), height * ((xy.y + 1) / 2)); };
-	std::vector<Vec2i> vecs;
-	std::vector<std::array<size_t, 3>> faces;
+	auto xytransform = [this](Vec3f xy) -> Vec2i { float factor = std::min(width, height); return { (int)(factor * ((xy.x + 1) / 2)), (int)(factor * ((xy.y + 1) / 2)) }; };
+	std::vector<Vec3f> vecs;
+	std::vector<Vec3f> normals;
+	std::vector<std::array<size_t, 3>> faceIndices;
+	std::vector<std::array<size_t, 3>> normalIndices;
 	for (std::string line; std::getline(ifs, line); ) {
 		std::stringstream ss(line);
 		std::string typeStr;
 		ss >> typeStr;
 		if (typeStr == "v") {
-			Vec2f coordf;
-			float ignore;
-			ss >> coordf.x >> coordf.y >> ignore;
-			vecs.emplace_back(xytransform(coordf));
+			Vec3f coordf;
+			ss >> coordf.x >> coordf.y >> coordf.z;
+			vecs.emplace_back(coordf);
+		} else if (typeStr == "vn") {
+			Vec3f coordf;
+			ss >> coordf.x >> coordf.y >> coordf.z;
+			normals.emplace_back(coordf);
 		} else if (typeStr == "f") {
 			std::array<size_t, 3> face;
+			std::array<size_t, 3> normal;
 			for (size_t i = 0; i < 3; i++) {
 				std::string vtf;
 				ss >> vtf;
-				std::string vidx = vtf.substr(0, vtf.find('/'));
+				size_t pos1 = vtf.find('/');
+				size_t pos2 = vtf.find('/', pos1 + 1);
+				std::string vidx = vtf.substr(0, pos1);
+				std::string nidx = vtf.substr(pos2 + 1, vtf.size());
 				std::stringstream vidxss(vidx);
+				std::stringstream nidxss(nidx);
 				vidxss >> face[i];
+				nidxss >> normal[i];
 			}
-			faces.emplace_back(face);
+			faceIndices.emplace_back(face);
+			normalIndices.emplace_back(normal);
 		}
 	}
 	if (mode == DrawMode::WireFrameIgnoreZ) {
-		for (const auto& face : faces) {
-			const auto& v1 = vecs[face[0] - 1];
-			const auto& v2 = vecs[face[1] - 1];
-			const auto& v3 = vecs[face[2] - 1];
-			line(v1, v2, stroke);
-			line(v2, v3, stroke);
-			line(v3, v1, stroke);
+		for(size_t i = 0; i < faceIndices.size(); i++) {
+			const auto& face = faceIndices[i];
+			const auto& normal = normalIndices[i];
+			const auto& v0 = vecs[face[0] - 1];
+			const auto& v1 = vecs[face[1] - 1];
+			const auto& v2 = vecs[face[2] - 1];
+			Vec3f n(cross(v1 - v0, v2 - v0));
+			n.normalize();
+			Vec3f light{ 0, 0, 1 };
+			float value = 255 * (light * n);
+			TGAColor intensity(value, value, value, 255);
+			if (value > 0) {
+				triangle(xytransform(v0), xytransform(v1), xytransform(v2), intensity, DrawMode::Filled);
+			}
 		}
 	}
 }
@@ -135,6 +156,7 @@ void TGAFile::triangle(const Vec2i& v1, const Vec2i& v2, const Vec2i& v3, const 
 		line(v2, v3, stroke);
 		line(v3, v1, stroke);
 		
+#if defined(TRIANGLE_LINE_SWEEP)
 		std::vector<Vec2i> vs{ v1, v2, v3 };
 		std::sort(vs.begin(), vs.end(), [](const auto& vl, const auto& vr) { return vl.y > vr.y; });
 		int x0 = vs[0].x;
@@ -161,5 +183,30 @@ void TGAFile::triangle(const Vec2i& v1, const Vec2i& v2, const Vec2i& v3, const 
 			int x2_ = x1 + t2 * (x0 - x1);
 			line(x1_ + 1, y, x2_ - 1, y, fill);
 		}
+#else
+		std::vector<Vec2i> vs{ v1, v2, v3 };
+		Vec2i boundmin{ width - 1, height - 1 };
+		Vec2i boundmax{ 0, 0 };
+		for (const auto& v : vs) {
+			boundmin.x = std::min(boundmin.x, v.x);
+			boundmin.y = std::min(boundmin.y, v.y);
+			boundmax.x = std::max(boundmax.x, v.x);
+			boundmax.y = std::max(boundmax.y, v.y);
+		}
+		for (int y = boundmin.y; y <= boundmax.y; y++) {
+			for (int x = boundmin.x; x <= boundmax.x; x++) {
+				Vec2i av = vs[1] - vs[0];
+				Vec2i bv = vs[2] - vs[0];
+				Vec2i pv = Vec2i{ x, y } - vs[0];
+				Vec3i xx{ av.x, bv.x, pv.x };
+				Vec3i yy{ av.y, bv.y, pv.y };
+				Vec3f ortho(cross(xx, yy));
+				ortho /= -ortho[2];
+				if (ortho[0] >= 0 && ortho[1] >= 0 && ortho[0] + ortho[1] <= 1) {
+					set(x, y, fill);
+				}
+			}
+		}
+#endif
 	}
 }

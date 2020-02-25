@@ -37,6 +37,7 @@ template <typename T> struct vec<3,T> {
     const T& operator[](const size_t i) const { assert(i<3); return i<=0 ? x : (1==i ? y : z); }
     float norm() { return std::sqrt(x*x+y*y+z*z); }
     vec<3,T> & normalize(T l=1) { *this = (*this)*(l/norm()); return *this; }
+    vec<2, T> xy() const { return {x, y}; }
 
     T x,y,z;
 };
@@ -67,6 +68,11 @@ template<size_t DIM,typename T,typename U> vec<DIM,T> operator*(vec<DIM,T> lhs, 
 
 template<size_t DIM,typename T,typename U> vec<DIM,T> operator/(vec<DIM,T> lhs, const U& rhs) {
     for (size_t i=DIM; i--; lhs[i]/=rhs);
+    return lhs;
+}
+
+template<size_t DIM, typename T, typename U> vec<DIM, T>& operator/=(vec<DIM, T>& lhs, const U& rhs) {
+    for (size_t i = DIM; i--; lhs[i] /= rhs);
     return lhs;
 }
 
